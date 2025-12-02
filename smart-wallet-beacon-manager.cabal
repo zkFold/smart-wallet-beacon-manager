@@ -1,0 +1,78 @@
+cabal-version: 3.12
+name: smart-wallet-beacon-manager
+version: 0.1.0.0
+-- synopsis:
+-- description:
+author: Vladimir Morozov
+maintainer: info@zkfold.io
+-- copyright:
+build-type: Simple
+
+common common
+  default-language: GHC2021
+  default-extensions:
+    DataKinds
+    DeriveAnyClass
+    DerivingStrategies
+    DerivingVia
+    GADTs
+    LambdaCase
+    MultiWayIf
+    OverloadedStrings
+    RecordWildCards
+    RoleAnnotations
+    TemplateHaskell
+    TypeFamilies
+    TypeFamilyDependencies
+    UndecidableInstances
+    UnicodeSyntax
+    ViewPatterns
+
+  ghc-options:
+    -Wall
+    -Wincomplete-uni-patterns
+    -Wunused-packages
+
+library
+  import: common
+  exposed-modules:
+    ZkFold.Cardano.SmartWallet.Beacon.Config
+    ZkFold.Cardano.SmartWallet.Beacon.Manager
+    ZkFold.Cardano.SmartWallet.Beacon.Types
+    ZkFold.Cardano.SmartWallet.Beacon.Utils
+
+  -- other-modules:
+  -- other-extensions:
+  build-depends:
+    aeson,
+    aeson-casing,
+    atlas-cardano,
+    base,
+    base64-bytestring,
+    bytestring,
+    containers,
+    deepseq,
+    deriving-aeson,
+    envy,
+    filepath,
+    plutus-tx,
+    req,
+    symbolic-base,
+    symbolic-examples,
+    text,
+    yaml,
+    zkfold-cardano,
+
+  hs-source-dirs: src
+
+executable beacon-manager
+  import: common
+  main-is: Main.hs
+  -- other-modules:
+  -- other-extensions:
+  build-depends:
+    base,
+    optparse-applicative,
+    smart-wallet-beacon-manager,
+
+  hs-source-dirs: app
