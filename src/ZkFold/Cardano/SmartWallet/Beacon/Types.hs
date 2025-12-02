@@ -134,7 +134,7 @@ toGyTxOutRef txHashBytes txOutput = txE
 -- | Determine the latest beacon mint/update transaction,
 -- retrieve the datum associated with it,
 -- and decode OAuth Key IDs stored in it.
-findBeaconUtxo ∷ GYTxQueryMonad m ⇒ BeaconToken → m (GYTxOutRef, GYDatum, [Text])
+findBeaconUtxo ∷ GYTxQueryMonad m ⇒ BeaconToken → m (GYTxOutRef, [Text])
 findBeaconUtxo BeaconToken {..} = do
   let beaconAssetClass = GYToken policyId tokenName
   tokenUTxOs ∷ [GYUTxO] ← utxosToList <$> utxosAtAddress (addressFromBech32 address) (Just beaconAssetClass)
@@ -144,16 +144,15 @@ findBeaconUtxo BeaconToken {..} = do
     [] → error $ "Token " <> show policyId <> "." <> show tokenName <> " not found at address " <> show address
     _ → error $ "Multiple tokens " <> show policyId <> "." <> show tokenName <> " found at address " <> show address
   let txOutRef = utxoRef beaconUtxo
-  datum' ← case utxoOutDatum beaconUtxo of
-    GYOutDatumInline datum → pure datum
-    GYOutDatumNone → error "No datum present with beacon token"
-    _ → error "Datum attached to the beacon token is just a hash, but it should be inline datum."
+  keys ← case utxoOutDatum beaconUtxo of
+    GYOutDatumInline datum' → do
+      let datum = datumToPlutus' datum'
+      let setupBytesMap ∷ PlutusMap.Map PlutusTx.BuiltinByteString SetupBytes = PlutusTx.unsafeFromBuiltinData datum
+      let keys' = T.decodeUtf8 . PlutusTx.fromBuiltin <$> PlutusMap.keys setupBytesMap
+      pure keys'
+    _ → pure []
 
-  let datum = datumToPlutus' datum'
-  let setupBytesMap ∷ PlutusMap.Map PlutusTx.BuiltinByteString SetupBytes = PlutusTx.unsafeFromBuiltinData datum
-  let keys = T.decodeUtf8 . PlutusTx.fromBuiltin <$> PlutusMap.keys setupBytesMap
-
-  pure (txOutRef, datum', keys)
+  pure (txOutRef, keys)
 
 setupToPlutus ∷ ZKSetupBytes → SetupBytes
 setupToPlutus ZKSetupBytes {..} =

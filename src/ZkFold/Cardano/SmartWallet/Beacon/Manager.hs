@@ -67,7 +67,7 @@ manageBeacon config@Config {..} op = do
           pure (txOutRefFromTuple (tid, 0))
         Update → do
           gyLogInfo' "" "Locating beacon token"
-          (txIn, _, keysPrev) ← findBeaconUtxo beaconToken
+          (txIn, keysPrev) ← findBeaconUtxo beaconToken
           if S.fromList keysPrev /= S.fromList (fmap jvkKid currentKeys)
             then do
               gyLogInfo' "" $ "Updating datum for token " ++ show cTokenName
@@ -92,10 +92,10 @@ manageBeacon config@Config {..} op = do
               pure txIn
   pure (oref, currentKeys)
  where
-  (signingKey, signingKeyAddress) = 
-      case signingKeyFromConfig config of
-        Just ka -> ka
-        _       -> error "Could not obtail signing key from config"
+  (signingKey, signingKeyAddress) =
+    case signingKeyFromConfig config of
+      Just ka → ka
+      _ → error "Could not obtail signing key from config"
 
   tokenMultisigAddress = tokenAddressFromConfig config
 
