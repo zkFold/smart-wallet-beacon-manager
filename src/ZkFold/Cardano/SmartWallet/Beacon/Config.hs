@@ -34,7 +34,7 @@ data Config = Config
   -- ^ Account index.
   , cFundAddrIx ∷ !(Maybe Word32)
   -- ^ Payment address index.
-  , cSignatories ∷ ![GYPaymentKeyHash]
+  , cSignatories ∷ ![GYAddressBech32]
   -- ^ Parties that may sign the update transaction.
   , cRequiredSignatures ∷ !Natural
   -- ^ The number of signatures required for the update transaction.
@@ -99,7 +99,21 @@ simpleScriptFromConfig ∷ Config → GYSimpleScript
 simpleScriptFromConfig Config {..} = script
  where
   script ∷ GYSimpleScript
-  script = RequireMOf (fromIntegral cRequiredSignatures) $ fmap RequireSignature cSignatories
+  script = RequireMOf (fromIntegral cRequiredSignatures) $ fmap RequireSignature signatoriesPkh
+
+  signatoriesPkh ∷ [GYPaymentKeyHash]
+  signatoriesPkh =
+    case mapM extractPkh cSignatories of
+      Just pkhs → pkhs
+      _ → error "Could not extract payment key hash from all the addresses"
+
+  extractPkh ∷ GYAddressBech32 → Maybe GYPaymentKeyHash
+  extractPkh addrb32 = do
+    let addr = addressFromBech32 addrb32
+    cred ← addressToPaymentCredential addr
+    case cred of
+      GYPaymentCredentialByKey pkh → pure pkh
+      _ → Nothing
 
 tokenAddressFromConfig ∷ Config → GYAddress
 tokenAddressFromConfig config@Config {..} = addressFromSimpleScript cNetworkId $ simpleScriptFromConfig config
