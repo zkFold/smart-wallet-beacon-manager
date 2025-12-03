@@ -19,7 +19,7 @@ import Data.Word (Word32)
 import Data.Yaml qualified as Yaml
 import Deriving.Aeson
 import GeniusYield.GYConfig (GYCoreConfig (..), GYCoreProviderInfo)
-import GeniusYield.Imports (throwIO, (&))
+import GeniusYield.Imports (throwIO)
 import GeniusYield.Types
 import System.Envy
 import System.FilePath (takeExtension)
@@ -29,16 +29,16 @@ data Config = Config
   , cNetworkId ∷ !GYNetworkId
   , cLogging ∷ ![GYLogScribeConfig]
   , cFundMnemonic ∷ !Mnemonic
-  -- ^ Mnemonic (seed phrase) to fund the transaction. It is also one of the signatories.
+  -- ^ Mnemonic (seed phrase) to fund the transaction.
   , cFundAccIx ∷ !(Maybe Word32)
   -- ^ Account index.
   , cFundAddrIx ∷ !(Maybe Word32)
   -- ^ Payment address index.
-  , cOtherSignatories ∷ ![GYPaymentKeyHash]
-  -- ^ Other parties that may sign the update transaction, besides the funding wallet.
+  , cSignatories ∷ ![GYAddressBech32]
+  -- ^ Parties that may sign the update transaction.
   , cRequiredSignatures ∷ !Natural
-  , -- % The number of signatures required for the update transaction.
-    cTokenName ∷ !GYTokenName
+  -- ^ The number of signatures required for the update transaction.
+  , cTokenName ∷ !GYTokenName
   -- ^ Beacon token name
   , cPolicyId ∷ !GYMintingPolicyId
   -- ^ Beacon token policy id
@@ -96,18 +96,24 @@ signingKeyFromConfig Config {..} = case wk' of
   wk' = walletKeysFromMnemonicIndexed cFundMnemonic (fromMaybe 0 cFundAccIx) (fromMaybe 0 cFundAddrIx)
 
 simpleScriptFromConfig ∷ Config → GYSimpleScript
-simpleScriptFromConfig config@Config {..} = script
+simpleScriptFromConfig Config {..} = script
  where
   script ∷ GYSimpleScript
-  script = RequireMOf (fromIntegral cRequiredSignatures) $ fmap RequireSignature (fundingPKeyHash : cOtherSignatories)
+  script = RequireMOf (fromIntegral cRequiredSignatures) $ fmap RequireSignature signatoriesPkh
 
-  Just (sKey, _) = signingKeyFromConfig config
+  signatoriesPkh ∷ [GYPaymentKeyHash]
+  signatoriesPkh =
+    case mapM extractPkh cSignatories of
+      Just pkhs → pkhs
+      _ → error "Could not extract payment key hash from all the addresses"
 
-  fundingPKeyHash ∷ GYPaymentKeyHash
-  fundingPKeyHash =
-    case sKey of
-      AGYPaymentSigningKey skey' → paymentKeyHash . paymentVerificationKey $ skey'
-      AGYExtendedPaymentSigningKey skey' → getExtendedVerificationKey skey' & extendedVerificationKeyHash
+  extractPkh ∷ GYAddressBech32 → Maybe GYPaymentKeyHash
+  extractPkh addrb32 = do
+    let addr = addressFromBech32 addrb32
+    cred ← addressToPaymentCredential addr
+    case cred of
+      GYPaymentCredentialByKey pkh → pure pkh
+      _ → Nothing
 
 tokenAddressFromConfig ∷ Config → GYAddress
 tokenAddressFromConfig config@Config {..} = addressFromSimpleScript cNetworkId $ simpleScriptFromConfig config
