@@ -33,7 +33,8 @@ This repository houses Beacon token manager to mint or update the token which st
          # Possible values of `verbosity` are `V0`, `V1`, `V2`, `V3` and `V4`. Consult https://hackage.haskell.org/package/katip-0.8.8.0/docs/Katip.html#t:Verbosity for more information about it.
         verbosity: V2
     
-    otherSignatories: []
+    signatories: 
+      - "fc7e7af658f14adf31353c7e8d8a44738a7f7a8075f1be157d7b94a1"
     
     requiredSignatures: 1
     
