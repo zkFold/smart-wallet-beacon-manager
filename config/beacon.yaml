@@ -1,0 +1,28 @@
+coreProviderPath: ./secrets/maestro-token.yaml
+
+networkId: mainnet
+logging:
+  - type:
+      tag: stderr
+    severity: Debug
+    verbosity: V2
+
+fundMnemonic:
+  - funding
+  - wallets
+  - mnemonic
+
+fundAccIx: 0
+fundAddrIx: 0
+
+otherSignatories: []
+
+requiredSignatures: 0
+
+tokenName: "7a6b466f6c64"
+
+policyId: "982beb80d155358fad5c3b0015c4b13f7d7341835246af037009d73a"
+
+updateInterval: 1800
+
+tokensToMint: 0

@@ -19,53 +19,54 @@ import Data.Word (Word32)
 import Data.Yaml qualified as Yaml
 import Deriving.Aeson
 import GeniusYield.GYConfig (GYCoreConfig (..), GYCoreProviderInfo)
-import GeniusYield.Imports (throwIO)
+import GeniusYield.Imports (throwIO, (&))
 import GeniusYield.Types
 import System.Envy
 import System.FilePath (takeExtension)
 
-data Config = Config
-  { cCoreProvider ∷ !GYCoreProviderInfo
-  , cNetworkId ∷ !GYNetworkId
-  , cLogging ∷ ![GYLogScribeConfig]
-  , cFundMnemonic ∷ !Mnemonic
-  -- ^ Mnemonic (seed phrase) to fund the transaction.
-  , cFundAccIx ∷ !(Maybe Word32)
-  -- ^ Account index.
-  , cFundAddrIx ∷ !(Maybe Word32)
-  -- ^ Payment address index.
-  , cSignatories ∷ ![GYAddressBech32]
-  -- ^ Parties that may sign the update transaction.
-  , cRequiredSignatures ∷ !Natural
-  -- ^ The number of signatures required for the update transaction.
-  , cTokenName ∷ !GYTokenName
-  -- ^ Beacon token name
-  , cPolicyId ∷ !GYMintingPolicyId
-  -- ^ Beacon token policy id
-  , cUpdateInterval ∷ !(Maybe Natural)
-  -- ^ Interval in seconds after which the manager should try to update the beacon token. If not provided, 3600 seconds (i.e., interval of an hour) is used.
-  , cTokensToMint ∷ Natural
+-- | Data type for deserializing input config parameters
+data RawConfig = RawConfig
+  { rcCoreProviderPath ∷ !(Maybe FilePath)
+  -- ^ Path to the file containing the core provider
+  , rcNetworkId ∷ !GYNetworkId
+  , rcLogging ∷ ![GYLogScribeConfig]
+  , rcFundMnemonic ∷ !Mnemonic
+  , rcFundAccIx ∷ !(Maybe Word32)
+  , rcFundAddrIx ∷ !(Maybe Word32)
+  , rcOtherSignatories ∷ ![GYPaymentKeyHash]
+  , rcRequiredSignatures ∷ !Natural
+  , rcTokenName ∷ !GYTokenName
+  , rcPolicyId ∷ !GYMintingPolicyId
+  , rcUpdateInterval ∷ !(Maybe Natural)
+  , rcTokensToMint ∷ Natural
   }
   deriving stock Generic
   deriving
     FromJSON
-    via CustomJSON '[FieldLabelModifier '[StripPrefix "c", LowerFirst]] Config
+    via CustomJSON '[FieldLabelModifier '[StripPrefix "rc", LowerFirst]] RawConfig
 
-instance FromEnv Config where
+instance FromEnv RawConfig where
   fromEnv _ = forceFromJsonOrYaml <$> env "BEACON_CONFIG"
-   where
-    forceFromJsonOrYaml ∷ FromJSON a ⇒ String → a
-    forceFromJsonOrYaml s =
-      let bs = fromString s
-          parseResults = eitherDecodeStrict bs :| [first show $ Yaml.decodeEither' bs]
-       in go parseResults
-     where
-      go (x :| []) = case x of
-        Left e → error e
-        Right a → a
-      go (x :| y : ys) = case x of
-        Left _ → go (y :| ys)
-        Right a → a
+
+newtype CoreProvider = CoreProvider {unwrapCP ∷ GYCoreProviderInfo}
+  deriving stock Generic
+  deriving newtype FromJSON
+
+instance FromEnv CoreProvider where
+  fromEnv _ = forceFromJsonOrYaml <$> env "CORE_PROVIDER"
+
+forceFromJsonOrYaml ∷ FromJSON a ⇒ String → a
+forceFromJsonOrYaml s =
+  let bs = fromString s
+      parseResults = eitherDecodeStrict bs :| [first show $ Yaml.decodeEither' bs]
+   in go parseResults
+ where
+  go (x :| []) = case x of
+    Left e → error e
+    Right a → a
+  go (x :| y : ys) = case x of
+    Left _ → go (y :| ys)
+    Right a → a
 
 eitherDecodeFileStrictJsonOrYaml ∷ FromJSON a ⇒ FilePath → IO (Either String a)
 eitherDecodeFileStrictJsonOrYaml fp =
@@ -74,10 +75,56 @@ eitherDecodeFileStrictJsonOrYaml fp =
     ".yaml" → first show <$> Yaml.decodeFileEither fp
     _ → throwIO $ userError "Only .json or .yaml extensions are supported for configuration."
 
+data Config = Config
+  { cCoreProvider ∷ !GYCoreProviderInfo
+  , cNetworkId ∷ !GYNetworkId
+  , cLogging ∷ ![GYLogScribeConfig]
+  , cFundMnemonic ∷ !Mnemonic
+  -- ^ Mnemonic (seed phrase) to fund the transaction. It is also one of the signatories.
+  , cFundAccIx ∷ !(Maybe Word32)
+  -- ^ Account index.
+  , cFundAddrIx ∷ !(Maybe Word32)
+  -- ^ Payment address index.
+  , cOtherSignatories ∷ ![GYPaymentKeyHash]
+  -- ^ Other parties that may sign the update transaction, besides the funding wallet.
+  , cRequiredSignatures ∷ !Natural
+  , -- % The number of signatures required for the update transaction.
+    cTokenName ∷ !GYTokenName
+  -- ^ Beacon token name
+  , cPolicyId ∷ !GYMintingPolicyId
+  -- ^ Beacon token policy id
+  , cUpdateInterval ∷ !(Maybe Natural)
+  -- ^ Interval in seconds after which the manager should try to update the beacon token. If not provided, 3600 seconds (i.e., interval of an hour) is used.
+  , cTokensToMint ∷ Natural
+  }
+  deriving stock Generic
+
 configOptionalFPIO ∷ Maybe FilePath → IO Config
 configOptionalFPIO mfp = do
   e ← maybe decodeEnv eitherDecodeFileStrictJsonOrYaml mfp
-  either (throwIO . userError) return e
+  either' (throwIO . userError) e $ \RawConfig {..} → do
+    e' ← maybe decodeEnv eitherDecodeFileStrictJsonOrYaml rcCoreProviderPath
+    either
+      (throwIO . userError)
+      ( pure . \coreProvider →
+          Config
+            { cCoreProvider = unwrapCP coreProvider
+            , cNetworkId = rcNetworkId
+            , cLogging = rcLogging
+            , cFundMnemonic = rcFundMnemonic
+            , cFundAccIx = rcFundAccIx
+            , cFundAddrIx = rcFundAddrIx
+            , cOtherSignatories = rcOtherSignatories
+            , cRequiredSignatures = rcRequiredSignatures
+            , cTokenName = rcTokenName
+            , cPolicyId = rcPolicyId
+            , cUpdateInterval = rcUpdateInterval
+            , cTokensToMint = rcTokensToMint
+            }
+      )
+      e'
+ where
+  either' l e r = either l r e
 
 coreConfigFromConfig ∷ Config → GYCoreConfig
 coreConfigFromConfig Config {..} =
@@ -96,24 +143,18 @@ signingKeyFromConfig Config {..} = case wk' of
   wk' = walletKeysFromMnemonicIndexed cFundMnemonic (fromMaybe 0 cFundAccIx) (fromMaybe 0 cFundAddrIx)
 
 simpleScriptFromConfig ∷ Config → GYSimpleScript
-simpleScriptFromConfig Config {..} = script
+simpleScriptFromConfig config@Config {..} = script
  where
   script ∷ GYSimpleScript
-  script = RequireMOf (fromIntegral cRequiredSignatures) $ fmap RequireSignature signatoriesPkh
+  script = RequireMOf (fromIntegral cRequiredSignatures) $ fmap RequireSignature (fundingPKeyHash : cOtherSignatories)
 
-  signatoriesPkh ∷ [GYPaymentKeyHash]
-  signatoriesPkh =
-    case mapM extractPkh cSignatories of
-      Just pkhs → pkhs
-      _ → error "Could not extract payment key hash from all the addresses"
+  Just (sKey, _) = signingKeyFromConfig config
 
-  extractPkh ∷ GYAddressBech32 → Maybe GYPaymentKeyHash
-  extractPkh addrb32 = do
-    let addr = addressFromBech32 addrb32
-    cred ← addressToPaymentCredential addr
-    case cred of
-      GYPaymentCredentialByKey pkh → pure pkh
-      _ → Nothing
+  fundingPKeyHash ∷ GYPaymentKeyHash
+  fundingPKeyHash =
+    case sKey of
+      AGYPaymentSigningKey skey' → paymentKeyHash . paymentVerificationKey $ skey'
+      AGYExtendedPaymentSigningKey skey' → getExtendedVerificationKey skey' & extendedVerificationKeyHash
 
 tokenAddressFromConfig ∷ Config → GYAddress
 tokenAddressFromConfig config@Config {..} = addressFromSimpleScript cNetworkId $ simpleScriptFromConfig config

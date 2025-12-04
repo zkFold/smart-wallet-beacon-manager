@@ -7,22 +7,13 @@ This repository houses Beacon token manager to mint or update the token which st
 1. Prepare a configuration, which can be stored either in file or in `BEACON_CONFIG` environment variable. Structure of it is as follows:
 
     ```yaml
-     # Blockchain provider used by Atlas, our off-chain transaction building tool.
+     # Path to file (.json or .yaml) contains blockchain provider used by Atlas, our off-chain transaction building tool. Also can be stored in `CORE_PROVIDER` environment variable.
      # Head over to https://atlas-app.io/getting-started/endpoints#providing-data-provider section to know how to configure `coreProvider` and what all options are available for it.
-    coreProvider:
-      maestroToken: YOUR_MAESTRO_TOKEN 
-      turboSubmit: false
-    
-    tokenName: "7a6b466f6c64" #zkFold in hex
-    policyId: "f34289c768c672ba37dec7c8f84392ee316e8392eaaa0ec45907eb15" 
-    
-     # The number of tokens to mint
-    tokensToMint: 1
-    
-    updateInterval: 60
-    
+    coreProviderPath: PATH_TO_YOUR_MAESTRO_TOKEN
+
+
      # Network id, only `mainnet` and `preprod` are supported for at the moment.
-    networkId: preprod 
+    networkId: mainnet
      # Logging configuration. It's an array to cater for potentially multiple scribes.
      # See it's description mentioned at https://atlas-app.io/getting-started/endpoints#providing-data-provider for more information.
     logging:
@@ -32,22 +23,30 @@ This repository houses Beacon token manager to mint or update the token which st
         severity: Debug
          # Possible values of `verbosity` are `V0`, `V1`, `V2`, `V3` and `V4`. Consult https://hackage.haskell.org/package/katip-0.8.8.0/docs/Katip.html#t:Verbosity for more information about it.
         verbosity: V2
-    
-    signatories: 
-      - "addr_test1qr78u7hktrc54he3x578arv2g3ec5lm6sp6lr0s404aefg2mmr0tte2mqygytqm4udyz805c35n2vmhyw7yhseljgl6q0tzvnp"
-    
-    requiredSignatures: 1
-    
+
+     # Wallet that provides UTxO to fund the update transaction 
     fundMnemonic:
+      - funding
+      - wallets
       - mnemonic
-      - to
-      - fund
-      - beacon
-      - updates
-    # Account index.
+
+     # Account index.
     fundAccIx: 0
-    # Payment address index.
+     # Payment address index.
     fundAddrIx: 0
+
+    otherSignatories: []
+
+    requiredSignatures: 0
+
+     # Beacon token name and minting policy
+    tokenName: "7a6b466f6c64"
+    policyId: "982beb80d155358fad5c3b0015c4b13f7d7341835246af037009d73a"
+
+     # Beacon update interval in seconds
+    updateInterval: 1800
+
+    tokensToMint: 0
     ```
 2. Run the manager with command `cabal run -- beacon-manager update -c my-config.yaml`.
 
