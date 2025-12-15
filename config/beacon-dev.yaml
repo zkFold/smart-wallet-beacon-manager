@@ -1,28 +1,26 @@
-coreProviderPath: ./secrets/maestro-token.yaml
+maestroApiKeyPath: ./secrets/maestro-token-dev
+turboSubmit: false
 
-networkId: mainnet
+networkId: preprod
 logging:
   - type:
       tag: stderr
     severity: Debug
     verbosity: V2
 
-fundMnemonic:
-  - funding
-  - wallets
-  - mnemonic
+fundMnemonicPath: ./secrets/beacon-mnemonic-dev.yaml
 
 fundAccIx: 0
 fundAddrIx: 0
 
 otherSignatories: []
 
-requiredSignatures: 0
+requiredSignatures: 1
 
 tokenName: "7a6b466f6c64"
 
 policyId: "982beb80d155358fad5c3b0015c4b13f7d7341835246af037009d73a"
 
-updateInterval: 1800
+updateInterval: 120
 
-tokensToMint: 0
+tokensToMint: 1

@@ -12,13 +12,16 @@ import Data.Aeson (
   eitherDecodeStrict,
  )
 import Data.Bifunctor (Bifunctor (..))
+import Data.Coerce
 import Data.List.NonEmpty (NonEmpty (..))
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromJust, fromMaybe)
 import Data.String (IsString (..))
+import Data.Text
+import Data.Text.IO qualified as TIO
 import Data.Word (Word32)
 import Data.Yaml qualified as Yaml
 import Deriving.Aeson
-import GeniusYield.GYConfig (GYCoreConfig (..), GYCoreProviderInfo)
+import GeniusYield.GYConfig (Confidential (..), GYCoreConfig (..), GYCoreProviderInfo (..))
 import GeniusYield.Imports (throwIO, (&))
 import GeniusYield.Types
 import System.Envy
@@ -26,11 +29,11 @@ import System.FilePath (takeExtension)
 
 -- | Data type for deserializing input config parameters
 data RawConfig = RawConfig
-  { rcCoreProviderPath ∷ !(Maybe FilePath)
+  { rcMaestroApiKeyPath ∷ !(Maybe FilePath)
   -- ^ Path to the file containing the core provider
   , rcNetworkId ∷ !GYNetworkId
   , rcLogging ∷ ![GYLogScribeConfig]
-  , rcFundMnemonic ∷ !Mnemonic
+  , rcFundMnemonicPath ∷ !FilePath
   , rcFundAccIx ∷ !(Maybe Word32)
   , rcFundAddrIx ∷ !(Maybe Word32)
   , rcOtherSignatories ∷ ![GYPaymentKeyHash]
@@ -39,6 +42,7 @@ data RawConfig = RawConfig
   , rcPolicyId ∷ !GYMintingPolicyId
   , rcUpdateInterval ∷ !(Maybe Natural)
   , rcTokensToMint ∷ Natural
+  , rcTurboSubmit ∷ !(Maybe Bool)
   }
   deriving stock Generic
   deriving
@@ -48,12 +52,12 @@ data RawConfig = RawConfig
 instance FromEnv RawConfig where
   fromEnv _ = forceFromJsonOrYaml <$> env "BEACON_CONFIG"
 
-newtype CoreProvider = CoreProvider {unwrapCP ∷ GYCoreProviderInfo}
+newtype MaestroApiKey = MaestroApiKey {unwrapMAK ∷ Text}
   deriving stock Generic
   deriving newtype FromJSON
 
-instance FromEnv CoreProvider where
-  fromEnv _ = forceFromJsonOrYaml <$> env "CORE_PROVIDER"
+instance FromEnv MaestroApiKey where
+  fromEnv _ = forceFromJsonOrYaml <$> env "MAESTRO_API_KEY"
 
 forceFromJsonOrYaml ∷ FromJSON a ⇒ String → a
 forceFromJsonOrYaml s =
@@ -74,6 +78,9 @@ eitherDecodeFileStrictJsonOrYaml fp =
     ".json" → eitherDecodeFileStrict fp
     ".yaml" → first show <$> Yaml.decodeFileEither fp
     _ → throwIO $ userError "Only .json or .yaml extensions are supported for configuration."
+
+eitherDecodeFileText ∷ Coercible Text a ⇒ FilePath → IO (Either String a)
+eitherDecodeFileText fp = pure . coerce <$> TIO.readFile fp
 
 data Config = Config
   { cCoreProvider ∷ !GYCoreProviderInfo
@@ -103,28 +110,35 @@ configOptionalFPIO ∷ Maybe FilePath → IO Config
 configOptionalFPIO mfp = do
   e ← maybe decodeEnv eitherDecodeFileStrictJsonOrYaml mfp
   either' (throwIO . userError) e $ \RawConfig {..} → do
-    e' ← maybe decodeEnv eitherDecodeFileStrictJsonOrYaml rcCoreProviderPath
+    eMaestroApiKey ← maybe decodeEnv eitherDecodeFileText rcMaestroApiKeyPath
+    eFundMnemonic ← eitherDecodeFileStrictJsonOrYaml rcFundMnemonicPath
     either
       (throwIO . userError)
-      ( pure . \coreProvider →
-          Config
-            { cCoreProvider = unwrapCP coreProvider
-            , cNetworkId = rcNetworkId
-            , cLogging = rcLogging
-            , cFundMnemonic = rcFundMnemonic
-            , cFundAccIx = rcFundAccIx
-            , cFundAddrIx = rcFundAddrIx
-            , cOtherSignatories = rcOtherSignatories
-            , cRequiredSignatures = rcRequiredSignatures
-            , cTokenName = rcTokenName
-            , cPolicyId = rcPolicyId
-            , cUpdateInterval = rcUpdateInterval
-            , cTokensToMint = rcTokensToMint
-            }
+      pure
+      ( lift eMaestroApiKey eFundMnemonic $
+          \(MaestroApiKey maestroApiKey) fundMnemonic →
+            Config
+              { cCoreProvider =
+                  GYMaestro
+                    { cpiMaestroToken = Confidential maestroApiKey
+                    , cpiTurboSubmit = rcTurboSubmit
+                    }
+              , cNetworkId = rcNetworkId
+              , cLogging = rcLogging
+              , cFundMnemonic = fundMnemonic
+              , cFundAccIx = rcFundAccIx
+              , cFundAddrIx = rcFundAddrIx
+              , cOtherSignatories = rcOtherSignatories
+              , cRequiredSignatures = rcRequiredSignatures
+              , cTokenName = rcTokenName
+              , cPolicyId = rcPolicyId
+              , cUpdateInterval = rcUpdateInterval
+              , cTokensToMint = rcTokensToMint
+              }
       )
-      e'
  where
   either' l e r = either l r e
+  lift a b f = f <$> a <*> b
 
 coreConfigFromConfig ∷ Config → GYCoreConfig
 coreConfigFromConfig Config {..} =
@@ -148,7 +162,7 @@ simpleScriptFromConfig config@Config {..} = script
   script ∷ GYSimpleScript
   script = RequireMOf (fromIntegral cRequiredSignatures) $ fmap RequireSignature (fundingPKeyHash : cOtherSignatories)
 
-  Just (sKey, _) = signingKeyFromConfig config
+  (sKey, _) = fromJust $ signingKeyFromConfig config
 
   fundingPKeyHash ∷ GYPaymentKeyHash
   fundingPKeyHash =
