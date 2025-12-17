@@ -7,22 +7,12 @@ This repository houses Beacon token manager to mint or update the token which st
 1. Prepare a configuration, which can be stored either in file or in `BEACON_CONFIG` environment variable. Structure of it is as follows:
 
     ```yaml
-     # Blockchain provider used by Atlas, our off-chain transaction building tool.
-     # Head over to https://atlas-app.io/getting-started/endpoints#providing-data-provider section to know how to configure `coreProvider` and what all options are available for it.
-    coreProvider:
-      maestroToken: YOUR_MAESTRO_TOKEN 
-      turboSubmit: false
-    
-    tokenName: "7a6b466f6c64" #zkFold in hex
-    policyId: "f34289c768c672ba37dec7c8f84392ee316e8392eaaa0ec45907eb15" 
-    
-     # The number of tokens to mint
-    tokensToMint: 1
-    
-    updateInterval: 60
-    
+     # Path to file contains maestro token which is used to create blockchain provider used by Atlas, our off-chain transaction building tool. Also can be stored in `MAESTRO_API_KEY` environment variable. Now we only support the Maestro provider
+    maestroApiKeyPath: ./secrets/maestro-token
+    turboSubmit: false
+ 
      # Network id, only `mainnet` and `preprod` are supported for at the moment.
-    networkId: preprod 
+    networkId: mainnet
      # Logging configuration. It's an array to cater for potentially multiple scribes.
      # See it's description mentioned at https://atlas-app.io/getting-started/endpoints#providing-data-provider for more information.
     logging:
@@ -32,23 +22,43 @@ This repository houses Beacon token manager to mint or update the token which st
         severity: Debug
          # Possible values of `verbosity` are `V0`, `V1`, `V2`, `V3` and `V4`. Consult https://hackage.haskell.org/package/katip-0.8.8.0/docs/Katip.html#t:Verbosity for more information about it.
         verbosity: V2
-    
-    signatories: 
-      - "addr_test1qr78u7hktrc54he3x578arv2g3ec5lm6sp6lr0s404aefg2mmr0tte2mqygytqm4udyz805c35n2vmhyw7yhseljgl6q0tzvnp"
-    
-    requiredSignatures: 1
-    
-    fundMnemonic:
-      - mnemonic
-      - to
-      - fund
-      - beacon
-      - updates
-    # Account index.
+     
+     # Wallet that provides UTxO to fund the update transaction 
+    fundMnemonicPath: ./secrets/beacon-mnemonic.yaml
+     
+     # Account index.
     fundAccIx: 0
-    # Payment address index.
+     # Payment address index.
     fundAddrIx: 0
+
+    otherSignatories: []
+
+    requiredSignatures: 1
+
+     # Beacon token name and minting policy
+    tokenName: ""
+    policyId: "77c6b433239c2e79f20a017d6e08d59bf9a1bce3fa3348d170ced87b"
+
+     # Beacon update interval in seconds
+    updateInterval: 120
+
+    tokensToMint: 1
     ```
+
+    Here you can find examples of secret parameters:
+    
+    `maestro-token`: 
+    ```
+    YOUR_MAESTRO_TOKEN
+    ```
+
+    `beacon-mnemonic.yaml`:
+    ```yaml
+    - funding
+    - wallets
+    - mnemonic
+    ```
+
 2. Run the manager with command `cabal run -- beacon-manager update -c my-config.yaml`.
 
    Call: `cabal run beacon-manager -- -h` for help. 😉

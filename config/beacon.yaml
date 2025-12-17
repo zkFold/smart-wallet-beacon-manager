@@ -1,0 +1,26 @@
+maestroApiKeyPath: ./secrets/maestro-token
+turboSubmit: false
+
+networkId: mainnet
+logging:
+  - type:
+      tag: stderr
+    severity: Debug
+    verbosity: V2
+
+fundMnemonicPath: ./secrets/beacon-mnemonic.yaml
+
+fundAccIx: 0
+fundAddrIx: 0
+
+otherSignatories: []
+
+requiredSignatures: 1
+
+tokenName: ""
+
+policyId: "77c6b433239c2e79f20a017d6e08d59bf9a1bce3fa3348d170ced87b"
+
+updateInterval: 120
+
+tokensToMint: 1
