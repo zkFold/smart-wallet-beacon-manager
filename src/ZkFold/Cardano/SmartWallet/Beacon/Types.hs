@@ -45,7 +45,7 @@ data BeaconToken
   , tokenName ∷ !GYTokenName
   , address ∷ !GYAddressBech32
   }
-  deriving stock Generic
+  deriving stock (Generic, Show)
   deriving anyclass (FromJSON, ToJSON)
 
 newtype NaturalFromBase64Url = NaturalFromBase64Url Natural
